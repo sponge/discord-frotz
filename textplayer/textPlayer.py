@@ -49,7 +49,7 @@ class TextPlayer:
 
             # Grab start info from game.
             start_output = self.get_command_output()
-            if 'Press' in start_output or 'press' in start_output or 'Hit' in start_output or 'hit' in start_output:
+            if 'Press ' in start_output or 'press ' in start_output or 'Hit ' in start_output or 'hit ' in start_output:
                 start_output += self.execute_command(' \n')
             if 'introduction' in start_output:
                 start_output += self.execute_command('no\n') # Parc
@@ -58,8 +58,12 @@ class TextPlayer:
 
     # Sends buffer from output pipe of game to a queue where it can be retrieved later
     def enqueue_pipe_output(self, output, queue):
-        for line in iter(output.readline, b''):
-            queue.put(line)
+        while True:
+            data = os.read(output.fileno(), 4096).decode('utf-8')
+            while '\n' in data:
+                line, data = data.split('\n', 1)
+                queue.put((line + '\n').encode('utf-8'))
+            queue.put((data + '\n').encode('utf-8'))
         output.close()
 
     # Run a bash command and wait until it finishes
