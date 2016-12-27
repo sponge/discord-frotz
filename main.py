@@ -5,9 +5,40 @@ import asyncio
 import glob
 import sys
 
+reactions = {
+    '\U00002B06': 'north',
+    '\U00002B07': 'south',
+    '\U00002B05': 'west',
+    '\U000027A1': 'east',
+    '\U0001F45D': 'inventory',
+}
+
 client = discord.Client()
 
 sessions = {}
+
+@asyncio.coroutine
+def send_text_with_reactions(channel, text):
+    msg = yield from client.send_message(channel, text)
+    for r in reactions:
+        yield from client.add_reaction(msg, r)
+
+@asyncio.coroutine
+def send_command(channel, command):
+    try:
+        t = sessions[channel.id]
+        command_output = t.execute_command(command)
+    except:
+        e = sys.exc_info()[0]
+        yield from client.send_message(channel, "resetting frotz due to exception: %s" % e)
+        sessions.pop(channel.id, None)
+        return
+
+    if len(command_output) == 0:
+        yield from client.send_message(channel, "Received empty response from interpreter")
+        return
+
+    yield from send_text_with_reactions(channel, command_output)
 
 @client.event
 @asyncio.coroutine
@@ -31,7 +62,7 @@ def on_message(message):
                 return
 
             sessions[message.channel.id] = t
-            yield from client.send_message(message.channel, start_info)
+            yield from send_text_with_reactions(message.channel, start_info)
         else:
             games = [os.path.basename(x) for x in glob.glob('./textplayer/games/*.z*')]
             games.sort()
@@ -42,20 +73,24 @@ def on_message(message):
             yield from client.send_message(message.channel, "no game started, start one with !play (name)")
             return
  
-        try:
-            t = sessions[message.channel.id]
-            command_output = t.execute_command(message.content[1:])
-        except:
-            e = sys.exc_info()[0]
-            yield from client.send_message(message.channel, "resetting frotz due to exception: %s" % e)
-            sessions.pop(message.channel.id, None)
-            return
-        #score = t.get_score()
-        #if score is None:
-        #    score = ('???', '???')
-        #outmsg = "**Score**: %s/%s\n\n%s" % (score[0], score[1], command_output)
-        if len(command_output) == 0:
-            command_output = "Received empty response from interpreter"
-        yield from client.send_message(message.channel, command_output)
+        yield from send_command(message.channel, message.content[1:])
+
+@client.event
+@asyncio.coroutine
+def on_reaction_add(reaction, user):
+    if user == client.user:
+        return
+
+    message = reaction.message
+    if message.channel.name != 'infocom':
+        return
+
+    if not message.channel.id in sessions:
+        return
+
+    if not reaction.emoji in reactions:
+        return
+
+    yield from send_command(message.channel, reactions[reaction.emoji]) 
 
 client.run(sys.argv[1])
