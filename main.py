@@ -23,9 +23,14 @@ sessions = {}
 @asyncio.coroutine
 def send_text_with_reactions(channel, text):
     msg = yield from client.send_message(channel, text)
-    sessions[channel.id]['lastMessage'] = msg.id
+    old_msg = sessions[channel.id].get('lastMessage', None)
+    sessions[channel.id]['lastMessage'] = msg
     for r in reactions:
         yield from client.add_reaction(msg, r)
+
+    if old_msg is not None:
+        tasks = [client.remove_reaction(old_msg, r, client.user) for r in reactions]
+        asyncio.gather(*tasks)
 
 @asyncio.coroutine
 def send_command(channel, command):
@@ -92,7 +97,7 @@ def on_reaction_add(reaction, user):
     if not message.channel.id in sessions:
         return
     
-    if 'lastMessage' in sessions[message.channel.id] and sessions[message.channel.id]['lastMessage'] != message.id:
+    if 'lastMessage' in sessions[message.channel.id] and sessions[message.channel.id]['lastMessage'].id != message.id:
         return
 
     if not reaction.emoji in reactions:
