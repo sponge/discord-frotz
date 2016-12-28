@@ -4,16 +4,17 @@ import discord
 import asyncio
 import glob
 import sys
+from collections import OrderedDict
 
-reactions = {
-    '\U00002B06': 'north',
-    '\U00002B07': 'south',
-    '\U00002B05': 'west',
-    '\U000027A1': 'east',
-    '\U0001F45D': 'inventory',
-    '\U0001F440': 'look',
-    '\U0001F4A4': 'wait',
-}
+reactions = OrderedDict([
+    ('\N{UPWARDS BLACK ARROW}', 'north'),
+    ('\N{DOWNWARDS BLACK ARROW}', 'south'),
+    ('\N{LEFTWARDS BLACK ARROW}', 'west'),
+    ('\N{BLACK RIGHTWARDS ARROW}', 'east'),
+    ('\N{BRIEFCASE}', 'inventory'),
+    ('\N{EYES}', 'look'),
+    ('\N{SLEEPING SYMBOL}', 'wait'),
+])
 
 client = discord.Client()
 
@@ -22,13 +23,14 @@ sessions = {}
 @asyncio.coroutine
 def send_text_with_reactions(channel, text):
     msg = yield from client.send_message(channel, text)
+    sessions[channel.id]['lastMessage'] = msg.id
     for r in reactions:
         yield from client.add_reaction(msg, r)
 
 @asyncio.coroutine
 def send_command(channel, command):
     try:
-        t = sessions[channel.id]
+        t = sessions[channel.id]['tp']
         command_output = t.execute_command(command)
     except:
         e = sys.exc_info()[0]
@@ -54,7 +56,7 @@ def on_message(message):
             t = tp.TextPlayer(parts[1])
             if message.channel.id in sessions:
                 try:
-                    sessions[message.channel.id].quit()
+                    sessions[message.channel.id]['tp'].quit()
                 except:
                     sessions.pop(message.channel.id, None)
             start_info = t.run()
@@ -63,7 +65,7 @@ def on_message(message):
                 yield from client.send_message(message.channel, "game failed to start")
                 return
 
-            sessions[message.channel.id] = t
+            sessions[message.channel.id] = { 'tp': t }
             yield from send_text_with_reactions(message.channel, start_info)
         else:
             games = [os.path.basename(x) for x in glob.glob('./textplayer/games/*.z*')]
@@ -88,6 +90,9 @@ def on_reaction_add(reaction, user):
         return
 
     if not message.channel.id in sessions:
+        return
+    
+    if 'lastMessage' in sessions[message.channel.id] and sessions[message.channel.id]['lastMessage'] != message.id:
         return
 
     if not reaction.emoji in reactions:
