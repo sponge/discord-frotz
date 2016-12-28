@@ -11,6 +11,8 @@ reactions = {
     '\U00002B05': 'west',
     '\U000027A1': 'east',
     '\U0001F45D': 'inventory',
+    '\U0001F440': 'look',
+    '\U0001F4A4': 'wait',
 }
 
 client = discord.Client()
